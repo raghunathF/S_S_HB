@@ -89,7 +89,7 @@ void config_tc1()
 	config_tc.count_direction = TC_COUNT_DIRECTION_UP;
 	config_tc.counter_8_bit.period = 0x55;
 	tc_init(&tc_instance1, TC1, &config_tc);
-	//tc_enable(&tc_instance1);
+	tc_enable(&tc_instance1);
 	
 	
 }

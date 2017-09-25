@@ -32,9 +32,10 @@
 #include "i2c_encoders.h"
 #include "find_pwm.h"
 
+#define CLOCKWISE 0
+#define ANTI_CLOCKWISE 1
 
 uint32_t pwm_rawvalue[15]={0};
-
 
 int16_t x_left_a[20];
 int16_t y_left_a[20];
@@ -256,6 +257,69 @@ void check()
 }
 */
 
+#define MAX_SPEED 230 
+#define MIN_SPEED 100 
+#define MAX_PARTION 560
+#define HALF_PARTION 280
+
+void set_motion(uint32_t position,uint32_t pwm_value)
+{
+	bool direction_motion=  CLOCKWISE;
+	uint32_t min_diff = 0;
+	uint32_t speed = 0;
+	if(position > pwm_value)
+	{
+		if(abs(position - pwm_value)> HALF_PARTION)
+		{
+			min_diff =  MAX_PARTION - abs(position - pwm_value) ;
+			direction_motion = CLOCKWISE;
+		}
+		else
+		{
+			min_diff =  abs(position - pwm_value);
+			direction_motion = ANTI_CLOCKWISE;
+		}
+		
+	}
+	else
+	{
+		if(abs(position - pwm_value)> HALF_PARTION)
+		{
+			min_diff =  MAX_PARTION - abs(position - pwm_value) ;
+			direction_motion = ANTI_CLOCKWISE;
+		}
+		else
+		{
+			min_diff =  abs(position - pwm_value);
+			direction_motion = CLOCKWISE;
+		}
+		
+		
+	}
+	
+	
+	
+	if(min_diff > 100)
+	{
+		set_motor(direction_motion,MAX_SPEED);
+	}
+	else
+	{	
+		speed = (min_diff * MAX_SPEED)/ HALF_PARTION ; 
+		if(speed > MAX_SPEED)
+		{
+			speed = MAX_SPEED;
+		}
+		else if(speed < MIN_SPEED)
+		{
+			speed = MIN_SPEED;
+		}
+		set_motor(direction_motion,speed);
+	}
+	
+	
+}
+
 
 
 int  convert2degree(volatile int x , volatile int y)
@@ -320,6 +384,8 @@ void check(uint32_t pwm_value)
 	volatile static int position=0;
 	static bool initialization = false;
 	
+	bool direction_motion = true;
+	
 	temp_x =  x_left_a[0];
 	temp_y =  y_left_a[0];
 	
@@ -360,8 +426,12 @@ void check(uint32_t pwm_value)
 			 {
 				 stop_flag = true;
 				 initialization = false;
-				 set_motor(0,0);
+				 set_motor(0,0);			
+			 }
+			 else
+			 {
 				
+				set_motion(position,pwm_value);
 			 }
 
 		}
@@ -374,10 +444,10 @@ void check(uint32_t pwm_value)
 				initialization = true;
 				count_i = 0;
 				
-				if(position != pwm_value)
-				{
-					set_motor(0,50);
-				}
+				//if(position != pwm_value)
+				//{
+					//set_motor(0,50);
+				//}
 			}
 			
 			
@@ -404,9 +474,9 @@ void check_motor(uint32_t present_pwm_value)
 	if(abs(present_pwm_value - prev_pwm_value) > 2  )//not equal to previous
 		{
 			
-			extint_chan_disable_callback(PWM_EIC_LINE,EXTINT_CALLBACK_TYPE_DETECT);
-			tc_enable(&tc_instance1);
-			tc_enable_callback(&tc_instance1, TC_CALLBACK_OVERFLOW);
+			//extint_chan_disable_callback(PWM_EIC_LINE,EXTINT_CALLBACK_TYPE_DETECT);
+			//tc_enable(&tc_instance1);
+			//tc_enable_callback(&tc_instance1, TC_CALLBACK_OVERFLOW);
 			//Disable external Interrupts;
 			stop_flag = false;
 			prev_pwm_value = present_pwm_value ;
@@ -416,8 +486,8 @@ void check_motor(uint32_t present_pwm_value)
 			{
 				check(temp);
 			}
-			tc_disable(&tc_instance1);
-			extint_chan_enable_callback(PWM_EIC_LINE,EXTINT_CALLBACK_TYPE_DETECT);
+			//tc_disable(&tc_instance1);
+			//extint_chan_enable_callback(PWM_EIC_LINE,EXTINT_CALLBACK_TYPE_DETECT);
 
 		}
 	
@@ -439,8 +509,8 @@ int main (void)
 	initialize_find_pwm();
 	while(1)
 	{
+		int i=0 ;
 		present_pwm_value = check_pwm();
 		check_motor(present_pwm_value);
-		
 	}
 }
