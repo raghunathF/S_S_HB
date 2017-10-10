@@ -59,6 +59,9 @@ void tc_callback_servo_control(struct tc_module *const module_inst)
 uint16_t read_encoders()
 {
 	static int16_t i_count;
+	//volatile static int16_t verify_position[500];
+	//volatile static int16_t verify_count=0;
+	
 	int16_t x_left,y_left,z_left;
 	int16_t temp;
 	bool conversion_complete;
@@ -72,7 +75,8 @@ uint16_t read_encoders()
 	
 	temp = bufferReceive_encoder[5] & 0x0010;
 	conversion_complete = temp<<5;
-	
+	filter_enable = 0;
+	position_error = 1;
 	if(conversion_complete == 0 )
 	{
 		x_left = bufferReceive_encoder[0];
@@ -115,6 +119,15 @@ uint16_t read_encoders()
 		//i_count = i_count + 1;
 		
 		filter_enable = 1;
+		position_error =0;
+		
+		//verify_position[verify_count] = x_left_a[i_count];
+		//verify_count++;
+		
+		//if(verify_count == 499 )
+		//{
+		//	verify_count = 0;
+		//}
 		
 		///if(i_count == 10 )
 		//{

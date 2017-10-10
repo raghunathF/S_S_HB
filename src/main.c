@@ -53,6 +53,7 @@ int stop_flag = false;
 
 
 int filter_enable = false;
+bool position_error = true;
 bool pwm_available= false;
 
 /*
@@ -130,8 +131,8 @@ int find_mode(uint32_t* input)
 			test_samples++;
 		}
 		create_bin = true;
-		
 	}
+	
 	for(k=0;k<test_samples;k++)
 	{
 		if( count_bin[k] >= temp_max)
@@ -257,8 +258,8 @@ void check()
 }
 */
 
-#define MAX_SPEED 230 
-#define MIN_SPEED 100 
+#define MAX_SPEED 80
+#define MIN_SPEED  35
 #define MAX_PARTION 560
 #define HALF_PARTION 280
 
@@ -267,6 +268,11 @@ void set_motion(uint32_t position,uint32_t pwm_value)
 	bool direction_motion=  CLOCKWISE;
 	uint32_t min_diff = 0;
 	uint32_t speed = 0;
+	
+	//volatile static uint16_t verify_motion[500];
+	//volatile static uint16_t verify_count=0;
+	
+	
 	if(position > pwm_value)
 	{
 		if(abs(position - pwm_value)> HALF_PARTION)
@@ -299,7 +305,7 @@ void set_motion(uint32_t position,uint32_t pwm_value)
 	
 	
 	
-	if(min_diff > 100)
+	if(min_diff > 50)
 	{
 		set_motor(direction_motion,MAX_SPEED);
 	}
@@ -318,6 +324,14 @@ void set_motion(uint32_t position,uint32_t pwm_value)
 	}
 	
 	
+	//verify_motion[verify_count] = position;
+	//verify_count++;
+	
+	//if(verify_count == 499 )
+	//{
+	//	verify_count = 0;
+	//}
+	
 }
 
 
@@ -326,7 +340,7 @@ int  convert2degree(volatile int x , volatile int y)
 {
 	volatile static int pos_x[10];
 	static int count = 0;
-	count++;
+	//count++;
 	if(x >= 0  && y < 0 )
 	{
 	//1st Quad
@@ -359,14 +373,16 @@ int  convert2degree(volatile int x , volatile int y)
 	//{
 	//	set_motor(0,0) ;
 	//}
-	if(count == 5)
-	{
-		count = 0;
+	//if(count == 5)
+	//{
+	//	count = 0;
 		//set_motor(0,200) ;
-	}
+	//}
 	return pos_x[count];
 	
 }
+
+
 //Check
 void check(uint32_t pwm_value)
 {
@@ -377,6 +393,8 @@ void check(uint32_t pwm_value)
 	static volatile int avg_y[35];
 	static int count_i_k = 0;
 	//static volatile int test_x[400];
+	volatile static uint16_t verify_motion[500];
+	volatile static uint16_t verify_count=0;
 	
 	static int count_i=0;
 	static int temp_x = 0;
@@ -389,9 +407,11 @@ void check(uint32_t pwm_value)
 	temp_x =  x_left_a[0];
 	temp_y =  y_left_a[0];
 	
-	if(filter_enable == true)
-	{
-		filter_enable = false;
+	
+	
+	//if(filter_enable == true)
+	//{
+		//filter_enable = false;
 		for(i=NO_OF_SAMPLES-1;i>=1;i--)
 		{
 			storage_array_x[i] = storage_array_x[i-1];	
@@ -418,6 +438,8 @@ void check(uint32_t pwm_value)
 		//count_i++;
 		avg_y[count_i] = (storage_array_y[4]*10 + storage_array_y[3]*15 + storage_array_y[2]*20 + storage_array_y[1]*25 + storage_array_y[0]*30)/100;
 		
+		
+		
 		if(initialization == true)
 		{
 			 position = convert2degree(avg_x[count_i],avg_y[count_i]);
@@ -425,13 +447,13 @@ void check(uint32_t pwm_value)
 			 if(abs(position-pwm_value) < 2)
 			 {
 				 stop_flag = true;
-				 initialization = false;
+				 //initialization = false;
 				 set_motor(0,0);			
 			 }
 			 else
 			 {
-				
 				set_motion(position,pwm_value);
+				 //set_motor(0,0);	
 			 }
 
 		}
@@ -452,32 +474,76 @@ void check(uint32_t pwm_value)
 			
 			
 		}
+		verify_motion[verify_count] = position;
+		verify_count++;
 		
-	}
+		if(verify_count == 499 )
+		{
+			verify_count = 0;
+		}
+		
+		
+	//}
 }
 
 uint32_t check_pwm()
 {
-	static uint32_t mode= 0;
+	static uint32_t present_mode= 0;
+	//static uint32_t previous_mode= 0;
 	if(pwm_available == true)
 	{
 		pwm_available = false;
-		mode = find_mode(pwm_rawvalue);
+		present_mode = find_mode(pwm_rawvalue);
+		//previous_mode = present_mode;
 	}
-	return mode;
+	
+	return present_mode;
 }
 
 void check_motor(uint32_t present_pwm_value)
 {
 	static uint32_t prev_pwm_value = 0;
-	int temp = 0;
-	if(abs(present_pwm_value - prev_pwm_value) > 2  )//not equal to previous
+	static uint32_t temp = 0;
+	
+	//extint_chan_disable_callback(PWM_EIC_LINE,EXTINT_CALLBACK_TYPE_DETECT);
+	read_encoders();
+	//extint_chan_enable_callback(PWM_EIC_LINE,EXTINT_CALLBACK_TYPE_DETECT);
+	
+	if(present_pwm_value > 0)
+	{
+		if(abs(present_pwm_value - prev_pwm_value) > 2 )
 		{
+			prev_pwm_value = present_pwm_value ;
+			temp = present_pwm_value;
+		}
+		if(position_error == 0)
+		{
+			check(temp);
+		}
+		
+	}
+	else
+	{
+		set_motor(0,0);
+	}
+	
+	
+	//if(abs(present_pwm_value - prev_pwm_value) > 2  )//not equal to previous
+	//{	
+			// Disable external interrupts
+			//--Read the sensor value
+			// Enable external interrupts
+			// Filter the sensor values and set the motor to motion 
+			
+			
+			
+			
 			
 			//extint_chan_disable_callback(PWM_EIC_LINE,EXTINT_CALLBACK_TYPE_DETECT);
 			//tc_enable(&tc_instance1);
 			//tc_enable_callback(&tc_instance1, TC_CALLBACK_OVERFLOW);
 			//Disable external Interrupts;
+			/*
 			stop_flag = false;
 			prev_pwm_value = present_pwm_value ;
 			temp = present_pwm_value;
@@ -486,10 +552,12 @@ void check_motor(uint32_t present_pwm_value)
 			{
 				check(temp);
 			}
+			*/
 			//tc_disable(&tc_instance1);
 			//extint_chan_enable_callback(PWM_EIC_LINE,EXTINT_CALLBACK_TYPE_DETECT);
 
-		}
+	//}
+	
 	
 }
 int main (void)
@@ -500,13 +568,21 @@ int main (void)
 	system_init();
 	enable_motor();
 	configure_encoder();
-	configure_pid_servo_control();
+	
+	//
+	//
+	//configure_pid_servo_control(); --Read encoders in the main loop
+	//initialize_xyz();
+	//set_motor(0,80) ;
+	/* Insert application code here, after the board has been initialized. */
+	//
+	//
+	
+	initialize_find_pwm();
+	
 	irq_initialize_vectors();
 	cpu_irq_enable();
-	//initialize_xyz();
-	//set_motor(0,200) ;
-	/* Insert application code here, after the board has been initialized. */
-	initialize_find_pwm();
+	
 	while(1)
 	{
 		int i=0 ;

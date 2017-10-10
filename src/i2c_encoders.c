@@ -132,7 +132,7 @@ void config_motors(void)
 	
 	struct tcc_config config_tcc;
 	tcc_get_config_defaults(&config_tcc, TCC0);
-	config_tcc.counter.clock_prescaler = TCC_CLOCK_PRESCALER_DIV256;
+	config_tcc.counter.clock_prescaler = TCC_CLOCK_PRESCALER_DIV2;
 	config_tcc.counter.period = 0x00FF;
 	config_tcc.compare.wave_generation = TCC_WAVE_GENERATION_SINGLE_SLOPE_PWM;
 	

@@ -16,6 +16,7 @@
 
 
 extern int filter_enable;
+extern bool position_error;
 extern int16_t x_left_a[20];
 extern int16_t y_left_a[20];
 extern int16_t z_left_a[20];

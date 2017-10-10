@@ -62,6 +62,8 @@ void pwm_detection_callback()
 	static bool interrupt_edge = true;
 	static int count_i = 0;
 	Eic *const EIC_module = _extint_get_eic_from_channel(PWM_EIC_LINE);
+	//volatile static uint16_t verify_pwm[250];
+	//volatile static uint16_t verify_count=0;
 	if(interrupt_edge == true )
 	{
 		tc_set_count_value(&tc_instance2, 0);
@@ -72,7 +74,9 @@ void pwm_detection_callback()
 	}
 	else
 	{
-		pwm_rawvalue[count_i] = tc_get_count_value(&tc_instance2);
+		pwm_rawvalue[count_i]		=		tc_get_count_value(&tc_instance2);
+		//verify_pwm[verify_count]	=		pwm_rawvalue[count_i];
+		
 		interrupt_edge = true;
 		
 		//pwm_value = (CONSTANT_TIMER/pwm_rawvalue[count_i]); //gives the hertz
@@ -80,6 +84,12 @@ void pwm_detection_callback()
 		EIC_module->CONFIG[0].reg |= 0x10000000;
 		
 		count_i ++;
+		//verify_count ++;
+		
+		//if(verify_count == 250)
+		//{
+		//	verify_count = 0;
+		//}
 		if(count_i ==  10)
 		{
 			count_i = 0;
@@ -97,11 +107,12 @@ void configure_ext_callback()
 	extint_register_callback(pwm_detection_callback,PWM_EIC_LINE,EXTINT_CALLBACK_TYPE_DETECT);
 	extint_chan_enable_callback(PWM_EIC_LINE,EXTINT_CALLBACK_TYPE_DETECT);
 }
-//Initialize timer and external interrupt
 
+
+//Initialize timer and external interrupt
 void initialize_find_pwm()
 {
-	
+
 	config_tc2();
 	configure_pwm_rising_extint();
 	configure_ext_callback();
