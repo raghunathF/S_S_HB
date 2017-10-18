@@ -31,9 +31,15 @@
 #include "servo_control.h"
 #include "i2c_encoders.h"
 #include "find_pwm.h"
+#include "calibration.h"
+#include "serial.h"
+
 
 #define CLOCKWISE 0
 #define ANTI_CLOCKWISE 1
+
+int intersect_min_value = 0;
+int intersect_max_value = 0;
 
 uint32_t pwm_rawvalue[15]={0};
 
@@ -55,6 +61,8 @@ int stop_flag = false;
 int filter_enable = false;
 bool position_error = true;
 bool pwm_available= false;
+bool test_main = false;
+int position_global = 0;
 
 /*
 int find_mode()
@@ -258,10 +266,10 @@ void check()
 }
 */
 
-#define MAX_SPEED 80
+#define MAX_SPEED 100
 #define MIN_SPEED  35
-#define MAX_PARTION 560
-#define HALF_PARTION 280
+#define MAX_PARTION 860
+#define HALF_PARTION 420
 
 void set_motion(uint32_t position,uint32_t pwm_value)
 {
@@ -278,12 +286,12 @@ void set_motion(uint32_t position,uint32_t pwm_value)
 		if(abs(position - pwm_value)> HALF_PARTION)
 		{
 			min_diff =  MAX_PARTION - abs(position - pwm_value) ;
-			direction_motion = CLOCKWISE;
+			direction_motion = ANTI_CLOCKWISE;
 		}
 		else
 		{
 			min_diff =  abs(position - pwm_value);
-			direction_motion = ANTI_CLOCKWISE;
+			direction_motion = CLOCKWISE;
 		}
 		
 	}
@@ -292,12 +300,12 @@ void set_motion(uint32_t position,uint32_t pwm_value)
 		if(abs(position - pwm_value)> HALF_PARTION)
 		{
 			min_diff =  MAX_PARTION - abs(position - pwm_value) ;
-			direction_motion = ANTI_CLOCKWISE;
+			direction_motion = CLOCKWISE;
 		}
 		else
 		{
 			min_diff =  abs(position - pwm_value);
-			direction_motion = CLOCKWISE;
+			direction_motion = ANTI_CLOCKWISE;
 		}
 		
 		
@@ -336,6 +344,118 @@ void set_motion(uint32_t position,uint32_t pwm_value)
 
 
 
+int  convert2degree(volatile int x , volatile int y)
+{
+	volatile static int pos;
+	static int count = 0;
+	int quad_value = intersect_max_value + intersect_min_value;
+	//count++;
+	if(x >= intersect_max_value )
+	{
+		//1st Quad
+		if((y <= intersect_max_value) && (y >= intersect_min_value) )
+		{
+			if(y>=0)
+			{
+				pos = intersect_max_value - y;
+			}
+			else
+			{
+				pos = intersect_max_value + abs(y);
+			}	
+		}
+		else if(y > intersect_max_value)
+		{
+			pos = 0;
+		}
+		else
+		{
+			pos = quad_value;
+		}
+	}
+	else if( y <= intersect_min_value)
+	{
+		//2nd Quad
+		if( (x <= intersect_max_value) && (x >= intersect_min_value) )
+		{
+			if(x>=0)
+			{
+				pos = (intersect_max_value - x) + quad_value ;
+			}
+			else
+			{
+				pos = intersect_max_value + abs(x) + quad_value;
+			}
+		}
+		else if(y > intersect_max_value)
+		{
+			pos =  quad_value ;
+		}
+		else
+		{
+			pos = 2*quad_value;
+		}
+	}
+	
+	else if( x <= intersect_min_value)
+	{
+		//3rd Quad
+		if( (y <= intersect_max_value) && (y >= intersect_min_value) )
+		{
+			if(y>=0)
+			{
+				pos = (abs(intersect_min_value) + y) + quad_value*2 ;
+			}
+			else
+			{
+				pos = abs(intersect_min_value) - abs(y)  + quad_value*2;
+			}
+		}
+		else if(y > intersect_max_value)
+		{
+			pos =  2*quad_value ;
+		}
+		else
+		{
+			pos = 3*quad_value;
+		}
+	}
+	
+	else if( x <= intersect_min_value)
+	{
+		//4th Quad
+
+		if( (x <= intersect_max_value) && (x >= intersect_min_value) )
+		{
+			if(x>=0)
+			{
+				pos = (abs(intersect_min_value) + x) + quad_value*3 ;
+			}
+			else
+			{
+				pos = abs(intersect_min_value) - abs(x)  + quad_value*3;
+			}
+		}
+		else if(x > intersect_max_value)
+		{
+			pos =  3*quad_value ;
+		}
+		else
+		{
+			pos = 4*quad_value;
+		}
+	}
+	else
+	{
+		pos = 0;
+	}
+	return pos;
+	
+}
+
+
+
+/*
 int  convert2degree(volatile int x , volatile int y)
 {
 	volatile static int pos_x[10];
@@ -381,7 +501,7 @@ int  convert2degree(volatile int x , volatile int y)
 	return pos_x[count];
 	
 }
-
+*/
 
 //Check
 void check(uint32_t pwm_value)
@@ -393,8 +513,8 @@ void check(uint32_t pwm_value)
 	static volatile int avg_y[35];
 	static int count_i_k = 0;
 	//static volatile int test_x[400];
-	volatile static uint16_t verify_motion[500];
-	volatile static uint16_t verify_count=0;
+	//volatile static uint16_t verify_motion[500];
+	//volatile static uint16_t verify_count=0;
 	
 	static int count_i=0;
 	static int temp_x = 0;
@@ -452,8 +572,8 @@ void check(uint32_t pwm_value)
 			 }
 			 else
 			 {
-				set_motion(position,pwm_value);
-				 //set_motor(0,0);	
+				//set_motion(position,pwm_value);
+				 set_motor(0,40);	
 			 }
 
 		}
@@ -474,17 +594,83 @@ void check(uint32_t pwm_value)
 			
 			
 		}
-		verify_motion[verify_count] = position;
-		verify_count++;
+		//verify_motion[verify_count] = position;
+		//verify_count++;
 		
-		if(verify_count == 499 )
-		{
-			verify_count = 0;
-		}
+		//if(verify_count == 499 )
+		//{
+		//	verify_count = 0;
+		//}
 		
 		
 	//}
 }
+
+void check_infinte_filter(uint32_t pwm_value)
+{
+	static int temp_x = 0;
+	static int temp_y = 0;
+	static int temp_z = 0;
+	
+	
+	int count_char=0;
+	volatile uint8_t print_output[10];
+	
+	
+	//volatile static int minimum = 0;
+	//volatile static int maximum = 0;
+	int degree = 0;
+	//static int test_count = 1001;
+	
+	static int temp_sum_x = 0;
+	static int temp_sum_y = 0;
+	static int temp_sum_z = 0;
+	static uint16_t count_i = 0;
+	int i =0;
+
+	//volatile static int16_t verify_position_x[600];
+	//volatile static int16_t verify_position_y[600];
+	
+	//volatile static int16_t verify_position[1000];
+	//volatile static int16_t coinc_match[20];
+	
+	//volatile static int16_t verify_position_z[400];
+
+	volatile static int16_t verify_count=0;
+	static bool init_temp_sum = false;
+	
+	temp_x =  x_left_a[0];
+	temp_y =  y_left_a[0] + Y_OFFSET;
+	
+	if(init_temp_sum == false)
+	{
+		temp_sum_x = temp_x;
+		temp_sum_y = temp_y;
+		init_temp_sum = true;
+	}
+	
+	//
+	temp_sum_x = (temp_sum_x*9 + temp_x*1)/10;
+	temp_sum_y = (temp_sum_y*9 + temp_y*1)/10;
+	
+	degree		= convert2degree2( temp_sum_x , temp_sum_y);
+	count_char	= convert(degree, print_output);
+	usart_write_buffer_wait(&usart_instance, print_output , count_char);
+	
+	if(abs(degree-pwm_value) < 2)
+	{
+		stop_flag = true;
+		//initialization = false;
+		set_motor(0,0);
+	}
+	else
+	{
+		set_motion(degree,pwm_value);
+		//set_motor(0,40);
+	}
+
+}
+
 
 uint32_t check_pwm()
 {
@@ -518,7 +704,7 @@ void check_motor(uint32_t present_pwm_value)
 		}
 		if(position_error == 0)
 		{
-			check(temp);
+			check_infinte_filter(temp);
 		}
 		
 	}
@@ -534,9 +720,6 @@ void check_motor(uint32_t present_pwm_value)
 			//--Read the sensor value
 			// Enable external interrupts
 			// Filter the sensor values and set the motor to motion 
-			
-			
-			
 			
 			
 			//extint_chan_disable_callback(PWM_EIC_LINE,EXTINT_CALLBACK_TYPE_DETECT);
@@ -557,19 +740,26 @@ void check_motor(uint32_t present_pwm_value)
 			//extint_chan_enable_callback(PWM_EIC_LINE,EXTINT_CALLBACK_TYPE_DETECT);
 
 	//}
-	
-	
 }
+
+
 int main (void)
 {	
 	//
 	uint32_t present_pwm_value = 0;
 	
+	//
 	system_init();
+	init_serial();
+	
+	//
 	enable_motor();
 	configure_encoder();
 	
-	//
+	
+	//--Calibration 
+	calibration_init();
+	
 	//
 	//configure_pid_servo_control(); --Read encoders in the main loop
 	//initialize_xyz();
@@ -577,16 +767,23 @@ int main (void)
 	/* Insert application code here, after the board has been initialized. */
 	//
 	//
-	
-	initialize_find_pwm();
+	//initialize_find_pwm();
 	
 	irq_initialize_vectors();
 	cpu_irq_enable();
 	
+	delay_init();
+	test_main = true;
+	position_global = 10 ;
 	while(1)
 	{
 		int i=0 ;
-		present_pwm_value = check_pwm();
-		check_motor(present_pwm_value);
+		//present_pwm_value = check_pwm();
+		//for(i=0; i<840 ; i++)
+		//{
+			//delay_ms(1000);
+			
+			check_motor(position_global);
+		//}
 	}
 }

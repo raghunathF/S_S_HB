@@ -62,11 +62,12 @@ uint16_t read_encoders()
 	//volatile static int16_t verify_position[500];
 	//volatile static int16_t verify_count=0;
 	
+	
 	int16_t x_left,y_left,z_left;
 	int16_t temp;
 	bool conversion_complete;
-	 uint8_t region;
-	 uint16_t y_pos;
+	uint8_t region;
+    uint16_t y_pos;
 	
 	x_left = 0;
 	y_left = 0;
